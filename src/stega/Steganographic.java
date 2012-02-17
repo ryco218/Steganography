@@ -2,8 +2,6 @@ package stega;
 import java.io.*;
 
 
-
-
 public class Steganographic {
 	private static int buffer_size_wav = 1024;
 	private static int buffer_size_msg = 1024;
@@ -156,7 +154,7 @@ public class Steganographic {
 
 			}else if (mode.equals("--decode")) {
 				// file where output should go
-				output = new File(args[3]);
+				output = new File(args[2]);
 
 				// opens an input stream for carrier
 				inStr = new FileInputStream(carrier);
@@ -179,12 +177,9 @@ public class Steganographic {
 				for (int i = 0; i < 4; i++) {
 					wavSize[i] = wavHeader[40 + i];
 				}
-				// converts the wav size to a long
-				long wav_size = bytesToNumber(wavSize, true);
 
 				// read in the carrier file 16 bytes at a time
 				wavBuffer = new byte[16];
-				int carrierChunksRead = 0;
 
 				// a byte included in the message
 				byte messageByte;
@@ -192,33 +187,31 @@ public class Steganographic {
 				byte[] messageSizeBytes = new byte[4];
 				long messageSize = 0;
 
-
-				while((messageSize==0 || sizeChecking(messageSize, wav_size)) ){
+				// Retrieve the message size
+				for(int i = 0; i < 4; i++){
+					// read a 16-byte chunk
+					inStr.read(wavBuffer);
+					
+					// retrieve the messageByte by calling decode
+					messageSizeBytes[i] = ByteOp.decode(wavBuffer, littleEndian);					
+				}
+				
+				// convert message size from bytes to long
+				messageSize = bytesToNumber(messageSizeBytes, true);
+				
+				// Retrieve the actual message, using messageSize as upper bound
+				for(long j = 0; j < messageSize; j++){
 					// Reset the messageByte to 0
 					messageByte = 0;
-
-					// Another 16-byte chunk has been read, add it to our count
+					
+					// read a 16-byte chunk
 					inStr.read(wavBuffer);
-					carrierChunksRead++;
 
 					// retrieve the messageByte by calling decode
 					messageByte = ByteOp.decode(wavBuffer, littleEndian);
-
-					// if within the first 4, we're still reading the payload size
-					if(carrierChunksRead <=4){
-						messageSizeBytes[carrierChunksRead-1] = messageByte;
-					}
 					
-					// if we just read the 4th chunk, we can determine the message size
-					if(messageSize==0 && carrierChunksRead==4){
-						// first 4 bytes contain the message size
-						messageSize = bytesToNumber(messageSizeBytes, true);
-					}
-					
-					// We're at the actual message now, so write it to the output stream
-					if(carrierChunksRead > 4){
-						outStr.write(messageByte);
-					}
+					// Write this byte of the message to output stream
+					outStr.write(messageByte);			
 				}
 			}
 
