@@ -182,7 +182,7 @@ public class Steganographic {
 				// converts the wav size to a long
 				long wav_size = bytesToNumber(wavSize, true);
 
-				// read in the carrier file 16 bytes at a time (one sample)
+				// read in the carrier file 16 bytes at a time
 				wavBuffer = new byte[16];
 				int carrierChunksRead = 0;
 
@@ -209,7 +209,7 @@ public class Steganographic {
 						messageSizeBytes[carrierChunksRead-1] = messageByte;
 					}
 					
-					// if we just read the 4th sample, we can determine the message size
+					// if we just read the 4th chunk, we can determine the message size
 					if(messageSize==0 && carrierChunksRead==4){
 						// first 4 bytes contain the message size
 						messageSize = bytesToNumber(messageSizeBytes, true);
