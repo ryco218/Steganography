@@ -1,11 +1,17 @@
 package stega;
+
 import java.io.*;
+
+import javax.management.RuntimeErrorException;
+
 
 
 public class Steganographic {
 	private static int buffer_size_wav = 1024;
 	private static int buffer_size_msg = 1024;
-
+	
+	public Steganographic() {
+	}
 
 
 	public static void main(String[] args) {
@@ -32,6 +38,7 @@ public class Steganographic {
 
 				payload = new File(args[2]);
 				output = new File(args[3]);
+				output.setWritable(true);
 				inStr = new FileInputStream(carrier);
 
 				inStr.read(wavHeader);
@@ -62,18 +69,31 @@ public class Steganographic {
 					int payloadBufferIndex = 0;
 					int payloadBufferMax = 0;
 
-					inStr.read(wavBuffer);
+					/*inStr.read(wavBuffer);
 					wavBufferMax = (int)Math.min(wav_size, buffer_size_wav);
 					wav_size -= buffer_size_wav;
-
+					*/
+					//test - writing in the size separately
+					byte[] sizeArray = new byte[64];
+					inStr.read(sizeArray);
+					wav_size -= 64;
+					
 					//first, write in the size of the payload
 					for (int i = 0; i < 4; i++) {
+						System.arraycopy(sizeArray, 16*i, encodeArray, 0, 16);
+						outStr.write(ByteOp.encode(payloadSize[i], encodeArray, littleEndian));
+					}
+					/*for (int i = 0; i < 4; i++) {
 						System.arraycopy(wavBuffer, wavBufferIndex, encodeArray, 0, 16);
 						ByteOp.encode(payloadSize[i], encodeArray, littleEndian);
 						System.arraycopy(encodeArray, 0, processedBuffer, wavBufferIndex, 16);
 						wavBufferIndex += 16;
-					}
+					}*/
 
+					inStr.read(wavBuffer);
+					wavBufferMax = (int)Math.min(wav_size, buffer_size_wav);
+					wav_size -= buffer_size_wav;
+					
 					//then, process the payload itself
 					while (payload_size > 0 || (payloadBufferIndex < payloadBufferMax)) {
 						if (payloadBufferIndex >= payloadBufferMax) {
@@ -101,7 +121,7 @@ public class Steganographic {
 						//if full, write processed buffer to output
 						if (wavBufferIndex >= wavBufferMax) {
 							outStr.write(processedBuffer, 0, wavBufferMax);
-
+							
 							//if there's more, refill wav buffer
 
 							if (wav_size > 0) {
@@ -177,6 +197,8 @@ public class Steganographic {
 				for (int i = 0; i < 4; i++) {
 					wavSize[i] = wavHeader[40 + i];
 				}
+				
+				long wavDataSize = bytesToNumber(wavSize, true);
 
 				// read in the carrier file 16 bytes at a time
 				wavBuffer = new byte[16];
@@ -191,27 +213,33 @@ public class Steganographic {
 				for(int i = 0; i < 4; i++){
 					// read a 16-byte chunk
 					inStr.read(wavBuffer);
-					
+
 					// retrieve the messageByte by calling decode
 					messageSizeBytes[i] = ByteOp.decode(wavBuffer, littleEndian);					
 				}
-				
+
 				// convert message size from bytes to long
 				messageSize = bytesToNumber(messageSizeBytes, true);
-				
-				// Retrieve the actual message, using messageSize as upper bound
-				for(long j = 0; j < messageSize; j++){
-					// Reset the messageByte to 0
-					messageByte = 0;
-					
-					// read a 16-byte chunk
-					inStr.read(wavBuffer);
+				if(sizeChecking(messageSize, wavDataSize)) {
+					// Retrieve the actual message, using messageSize as upper bound
+					for(long j = 0; j < messageSize; j++){
+						// Reset the messageByte to 0
+						messageByte = 0;
 
-					// retrieve the messageByte by calling decode
-					messageByte = ByteOp.decode(wavBuffer, littleEndian);
-					
-					// Write this byte of the message to output stream
-					outStr.write(messageByte);			
+						// read a 16-byte chunk
+						inStr.read(wavBuffer);
+
+						// retrieve the messageByte by calling decode
+						messageByte = ByteOp.decode(wavBuffer, littleEndian);
+
+						// Write this byte of the message to output stream
+						outStr.write(messageByte);			
+					}
+				} else {
+					resultMsg = "No Valid Payload Detected.";
+					outStr.close();
+					output.delete();
+					throw new RuntimeErrorException(null);
 				}
 			}
 
@@ -231,7 +259,7 @@ public class Steganographic {
 
 		catch(Exception e) {
 			e.printStackTrace();
-			resultMsg = "SomeErrorMsg";
+			resultMsg = "Something goes wrong.";
 		}
 
 		finally {
@@ -244,7 +272,7 @@ public class Steganographic {
 
 
 
-	private static boolean sizeChecking(long size_msg, long size_wav_data) {
+	public static boolean sizeChecking(long size_msg, long size_wav_data) {
 		int portion = 16;
 		boolean re = false;
 		//+4 to include the size, * portion given the spacing of the bits 
@@ -257,7 +285,7 @@ public class Steganographic {
 
 
 	//little endian
-	private static byte[] numberToBytes(long size) {
+	public static byte[] numberToBytes(long size) {
 		byte[] re = new byte[4];
 		for (int i = 0; i < 4; i++) {
 			re[i] = 0;
@@ -269,7 +297,7 @@ public class Steganographic {
 
 
 	//ridiculous kludge to work with little-endian, unsigned numbers in Java
-	private static long bytesToNumber(byte[] bytes, boolean littleEndian) {
+	public static long bytesToNumber(byte[] bytes, boolean littleEndian) {
 		long re = 0;
 		byte[] newBytes = new byte[4];
 
